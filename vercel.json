@@ -1,0 +1,41 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/briefing",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/sweeps",
+      "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron/forecast",
+      "schedule": "30 12 * * *"
+    },
+    {
+      "path": "/api/cron/analytics",
+      "schedule": "0 13 * * 1"
+    },
+    {
+      "path": "/api/cron/health-scores",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/graph-importance",
+      "schedule": "30 9 * * *"
+    },
+    {
+      "path": "/api/cron/data-quality",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/backup",
+      "schedule": "30 4 * * *"
+    },
+    {
+      "path": "/api/cron/finance-snapshot",
+      "schedule": "0 5 * * *"
+    }
+  ]
+}

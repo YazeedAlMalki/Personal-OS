@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Dark-first neutral ramp (oklch) */
+  --ink-0: oklch(0.16 0.012 260);   /* page background */
+  --ink-1: oklch(0.21 0.014 260);   /* card background */
+  --ink-2: oklch(0.30 0.016 260);   /* raised / hover */
+  --ink-3: oklch(0.62 0.010 260);   /* muted text */
+  --ink-4: oklch(0.97 0.005 260);   /* primary text */
+  --line:  oklch(0.30 0.014 260 / 0.6);
+  --accent: oklch(0.72 0.15 250);
+  --ok:     oklch(0.74 0.16 150);
+  --warn:   oklch(0.80 0.15 85);
+  --danger: oklch(0.66 0.20 25);
+}
+
+html,
+body {
+  background: var(--ink-0);
+  color: var(--ink-4);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  border-color: var(--line);
+}

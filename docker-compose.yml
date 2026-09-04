@@ -1,0 +1,40 @@
+# Self-host topology (locked decision, §17): Next.js app + Ollama on one box.
+# Supabase is used as the database — start with the free cloud tier, or add a
+# self-hosted Supabase stack later. This compose covers the app + local LLM.
+#
+#   docker compose up -d
+#   docker compose exec ollama ollama pull llama3.1:8b
+#   docker compose exec ollama ollama pull nomic-embed-text
+#
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.local
+    environment:
+      # Inside the compose network, reach Ollama by service name.
+      OLLAMA_BASE_URL: http://ollama:11434
+    depends_on:
+      - ollama
+
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./ollama-data:/root/.ollama
+    # For GPU acceleration, uncomment (NVIDIA Container Toolkit required):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+volumes:
+  ollama-data:
