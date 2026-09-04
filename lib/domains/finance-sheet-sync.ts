@@ -74,7 +74,9 @@ export async function runFinanceSnapshot(
   const extraction = extractSnapshotDeterministic(tabs);
   const date = todayInUserTimezone();
 
-  if (extraction.confidence >= FINANCE_CONFIDENCE_THRESHOLD && extraction.snapshot.net_worth !== undefined) {
+  const hasAnchorField =
+    extraction.snapshot.net_worth !== undefined || extraction.snapshot.cash_balance !== undefined;
+  if (extraction.confidence >= FINANCE_CONFIDENCE_THRESHOLD && hasAnchorField) {
     const parsed = financeSnapshotCreate.safeParse({
       date,
       ...extraction.snapshot,
@@ -82,7 +84,7 @@ export async function runFinanceSnapshot(
       notes: extraction.notes || undefined,
     });
     if (parsed.success) {
-      await upsertFinanceSnapshot(supabase, parsed.data);
+      await upsertFinanceSnapshot(supabase, parsed.data, userId);
       return { status: "written", date, confidence: extraction.confidence, matched: extraction.matched };
     }
     // Validation failed even though extraction looked confident — treat like

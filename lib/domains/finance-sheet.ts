@@ -167,6 +167,18 @@ export function extractSnapshotDeterministic(tabs: SheetTabs): FinanceExtraction
     notes = notes || "No 'net worth' row found and assets/liabilities weren't both present to derive one.";
   }
 
+  // Nothing net-worth-shaped found at all — try the other known shape
+  // (Google's built-in Monthly Budget template) before giving up.
+  if (
+    found.net_worth === undefined &&
+    found.assets === undefined &&
+    found.liabilities === undefined &&
+    found.cash_balance === undefined
+  ) {
+    const budget = extractBudgetTemplateSnapshot(tabs);
+    if (budget) return budget;
+  }
+
   return {
     snapshot: {
       net_worth: found.net_worth,
@@ -186,5 +198,81 @@ export function extractSnapshotDeterministic(tabs: SheetTabs): FinanceExtraction
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+// --- 2b. Extract — Google's built-in "Monthly Budget" template shape --------
+//
+// A different, common shape from the net-worth scan above: no assets/
+// liabilities/net-worth at all, just a start/end balance and Planned/Actual
+// rows under "Expenses"/"Income" section headers (Google Sheets template
+// gallery > "Monthly budget"). Recognized structurally (START BALANCE/END
+// BALANCE labels, "Actual" rows under Expenses/Income headers) rather than by
+// tab name, since it's a fixed, widely-used layout. Tried only when the
+// net-worth scan above found nothing — never overrides a real net-worth read.
+function extractBudgetTemplateSnapshot(tabs: SheetTabs): FinanceExtraction | null {
+  for (const tabName of pickCandidateTabs(tabs)) {
+    const rows = tabs[tabName] ?? [];
+    let cashBalance: number | undefined;
+    let actualExpenses: number | undefined;
+    let actualIncome: number | undefined;
+    const sectionCols: { expenses?: number; income?: number } = {};
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i] ?? [];
+
+      // "START BALANCE" / "END BALANCE" label row → values sit directly below,
+      // same column.
+      const endIdx = row.findIndex((c) => typeof c === "string" && /end\s*balance/i.test(c));
+      if (endIdx >= 0 && cashBalance === undefined) {
+        const below = rows[i + 1]?.[endIdx] ?? null;
+        const v = firstNumber([below]);
+        if (v !== null) cashBalance = v;
+      }
+
+      // Section headers mark which column belongs to Expenses vs Income.
+      row.forEach((c, idx) => {
+        if (typeof c !== "string") return;
+        const label = c.trim().toLowerCase();
+        if (label === "expenses" && sectionCols.expenses === undefined) sectionCols.expenses = idx;
+        if (label === "income" && sectionCols.income === undefined) sectionCols.income = idx;
+      });
+
+      // "Actual" row → value one cell to the right, matched to a section by
+      // the column the "Actual" label sits in.
+      row.forEach((c, idx) => {
+        if (typeof c !== "string" || c.trim().toLowerCase() !== "actual") return;
+        const v = firstNumber([row[idx + 1] ?? null]);
+        if (v === null) return;
+        if (idx === sectionCols.expenses && actualExpenses === undefined) actualExpenses = v;
+        if (idx === sectionCols.income && actualIncome === undefined) actualIncome = v;
+      });
+    }
+
+    if (cashBalance === undefined && actualExpenses === undefined && actualIncome === undefined) continue;
+
+    const matched: string[] = [];
+    if (cashBalance !== undefined) matched.push("cash_balance(end_balance)");
+    if (actualIncome !== undefined) matched.push("income_month_to_date(actual)");
+    if (actualExpenses !== undefined) matched.push("expenses_month_to_date(actual)");
+
+    let confidence = 0;
+    if (cashBalance !== undefined) confidence += 0.6;
+    if (actualIncome !== undefined) confidence += 0.2;
+    if (actualExpenses !== undefined) confidence += 0.2;
+
+    return {
+      snapshot: {
+        cash_balance: cashBalance,
+        income_month_to_date: actualIncome,
+        expenses_month_to_date: actualExpenses,
+        currency: "USD",
+      },
+      confidence: Math.min(1, confidence),
+      matched,
+      notes:
+        "Matched Google's built-in Monthly Budget template shape (start/end balance + income/expense actuals) — this sheet has no net worth/assets/liabilities.",
+    };
+  }
+  return null;
 }
 

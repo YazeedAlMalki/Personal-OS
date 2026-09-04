@@ -92,3 +92,38 @@ describe("extractSnapshotDeterministic", () => {
     expect(result.snapshot.assets).toBe(160000);
   });
 });
+
+describe("extractSnapshotDeterministic — budget template fallback", () => {
+  it("reads Google's built-in Monthly Budget template (start/end balance + actuals)", () => {
+    const tabs: SheetTabs = {
+      Summary: [
+        [null, null, null, "START BALANCE ", " END BALANCE", null, null, null, "Saved this month", null, null],
+        [null, null, null, 1000, 1500, null, null, null, null, null, null],
+        [null, "Expenses", "Expenses", "Expenses", "Expenses", "Expenses", null, "Income", null, null, null],
+        [null, "Planned", 950, null, null, null, null, "Planned", 1450, null, null],
+        [null, "Actual", 1000, null, null, null, null, "Actual", 1500, null, null],
+      ],
+      Transactions: [["Date", "Amount", "Description", "Category"]],
+    };
+    const result = extractSnapshotDeterministic(tabs);
+    expect(result.snapshot.cash_balance).toBe(1500);
+    expect(result.snapshot.expenses_month_to_date).toBe(1000);
+    expect(result.snapshot.income_month_to_date).toBe(1500);
+    expect(result.snapshot.net_worth).toBeUndefined();
+    expect(result.confidence).toBeGreaterThanOrEqual(0.6);
+    expect(result.matched).toContain("cash_balance(end_balance)");
+  });
+
+  it("does not fall back to the budget template when a real net-worth sheet is present", () => {
+    const tabs: SheetTabs = {
+      Summary: [
+        ["Net Worth", 125000],
+        ["Total Assets", 160000],
+        ["Total Liabilities", 35000],
+      ],
+    };
+    const result = extractSnapshotDeterministic(tabs);
+    expect(result.snapshot.net_worth).toBe(125000);
+    expect(result.matched).not.toContain("cash_balance(end_balance)");
+  });
+});

@@ -19,8 +19,12 @@ export async function listFinanceSnapshots(
 export async function upsertFinanceSnapshot(
   supabase: SupabaseClient,
   input: FinanceSnapshotCreate,
+  // Explicit owner for service-role callers (e.g. the finance-snapshot cron,
+  // which runs outside a user session so RLS's auth.uid() default doesn't
+  // apply); RLS-scoped callers omit this and get the default.
+  userId?: string,
 ): Promise<FinanceSnapshot> {
-  const row = { source: "manual", ...input };
+  const row = { source: "manual", ...input, ...(userId ? { user_id: userId } : {}) };
   const { data, error } = await supabase
     .from("finance_snapshots")
     .upsert(row, { onConflict: "user_id,date" })
