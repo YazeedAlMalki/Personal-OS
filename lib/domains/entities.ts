@@ -86,6 +86,30 @@ export async function createRelationship(
   return data as EntityRelationshipRow;
 }
 
+export async function updateRelationship(
+  supabase: SupabaseClient,
+  id: string,
+  input: {
+    relationship_type?: string;
+    strength?: number | null;
+    notes?: string | null;
+  },
+): Promise<EntityRelationshipRow> {
+  const { data, error } = await supabase
+    .from("entity_relationships")
+    .update(input)
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as EntityRelationshipRow;
+}
+
+export async function deleteRelationship(supabase: SupabaseClient, id: string): Promise<void> {
+  const { error } = await supabase.from("entity_relationships").delete().eq("id", id);
+  if (error) throw error;
+}
+
 // ---- Resolution & mentions ---------------------------------------------------
 
 // Exact (case-insensitive) match first, then prefix/substring fuzzy match.

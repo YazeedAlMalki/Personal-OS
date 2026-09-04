@@ -1,10 +1,13 @@
 import { describe, it, expect } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  createRelationship,
+  deleteRelationship,
   ensureEdge,
   getGraph,
   linkEntitiesForCapture,
   recomputeImportance,
+  updateRelationship,
 } from "@/lib/domains/entities";
 import { importanceScore } from "@/lib/scoring/graph";
 
@@ -54,7 +57,7 @@ class FakeDB {
 }
 
 class QB implements PromiseLike<{ data: unknown; error: null }> {
-  private op: "select" | "insert" | "update" = "select";
+  private op: "select" | "insert" | "update" | "delete" = "select";
   private payload: Row | Row[] | null = null;
   private filters: Array<(r: Row) => boolean> = [];
   private limitN: number | null = null;
@@ -73,6 +76,10 @@ class QB implements PromiseLike<{ data: unknown; error: null }> {
   update(p: Row) {
     this.op = "update";
     this.payload = p;
+    return this;
+  }
+  delete() {
+    this.op = "delete";
     return this;
   }
   select(_cols?: string) {
@@ -128,6 +135,11 @@ class QB implements PromiseLike<{ data: unknown; error: null }> {
     let matched = this.rows().filter((r) => this.filters.every((f) => f(r)));
     if (this.op === "update") {
       for (const r of matched) Object.assign(r, this.payload);
+      return { data: matched, error: null };
+    }
+    if (this.op === "delete") {
+      const remaining = this.rows().filter((r) => !matched.includes(r));
+      this.db.tables[this.table] = remaining;
       return { data: matched, error: null };
     }
     if (this.limitN !== null) matched = matched.slice(0, this.limitN);
@@ -306,5 +318,42 @@ describe("recomputeImportance", () => {
     await recomputeImportance(db.client, undefined, NOW);
     // Only opportunity component applies: 30 of 100.
     expect(Number(db.tables.entities![0]!.importance_score)).toBe(30);
+  });
+});
+
+describe("updateRelationship / deleteRelationship", () => {
+  it("updates the type/strength/notes of an existing edge", async () => {
+    const db = new FakeDB();
+    const created = await createRelationship(db.client, {
+      source_entity_id: "e1",
+      target_entity_id: "e2",
+      relationship_type: "knows",
+      strength: 0.3,
+    });
+
+    const updated = await updateRelationship(db.client, created.id, {
+      relationship_type: "colleague",
+      strength: 0.8,
+      notes: "met at a conference",
+    });
+
+    expect(updated.id).toBe(created.id);
+    expect(updated.relationship_type).toBe("colleague");
+    expect(Number(updated.strength)).toBe(0.8);
+    expect(updated.notes).toBe("met at a conference");
+  });
+
+  it("removes an edge", async () => {
+    const db = new FakeDB();
+    const created = await createRelationship(db.client, {
+      source_entity_id: "e1",
+      target_entity_id: "e2",
+      relationship_type: "knows",
+    });
+    expect(db.tables.entity_relationships).toHaveLength(1);
+
+    await deleteRelationship(db.client, created.id);
+
+    expect(db.tables.entity_relationships).toHaveLength(0);
   });
 });

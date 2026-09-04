@@ -256,6 +256,13 @@ export const relationshipCreate = z.object({
 });
 export type RelationshipCreate = z.infer<typeof relationshipCreate>;
 
+export const relationshipUpdate = z.object({
+  relationship_type: z.string().min(1).max(60).optional(),
+  strength: z.number().min(0).max(1).nullish(),
+  notes: z.string().max(2000).nullish(),
+});
+export type RelationshipUpdate = z.infer<typeof relationshipUpdate>;
+
 // ---- Spec §10 remaining domain CRUD ----------------------------------------
 
 export const decisionCreate = z.object({
