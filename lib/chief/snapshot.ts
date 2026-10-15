@@ -82,7 +82,7 @@ export async function buildSnapshot(
       .limit(14),
     supabase
       .from("calendar_events_cache")
-      .select("start_time,end_time")
+      .select("start_time,end_time,all_day")
       .gte("start_time", tomorrowStart.toISOString())
       .lt("start_time", tomorrowEnd.toISOString())
       .limit(200),
@@ -114,6 +114,9 @@ export async function buildSnapshot(
   // Tomorrow load.
   let calendarBusyMinutes = 0;
   for (const ev of tomorrowEvents.data ?? []) {
+    // All-day events (holidays, birthdays, OOO) are dates, not meetings — their
+    // exclusive DTEND would otherwise count as 24h of busy time.
+    if (ev.all_day) continue;
     const s = new Date(ev.start_time);
     const e = ev.end_time ? new Date(ev.end_time) : null;
     if (e && !Number.isNaN(s.getTime()) && !Number.isNaN(e.getTime())) {

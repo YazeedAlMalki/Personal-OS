@@ -74,6 +74,7 @@ export function formatBriefing(insights: Insight[], date: Date): string {
   if (insights.length === 0) return "All clear — nothing flagged today.";
 
   const dateStr = date.toLocaleDateString("en-US", {
+    timeZone: process.env.USER_TIMEZONE || "UTC",
     weekday: "long",
     month: "long",
     day: "numeric",

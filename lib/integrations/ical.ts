@@ -10,7 +10,10 @@
 // Google, Outlook and iCloud all emit IANA-named TZIDs). A "floating" local
 // time (no Z, no TZID) is interpreted in USER_TIMEZONE, per RFC 5545 §3.3.5.
 // All-day DATE values stay at UTC midnight and are deliberately NOT shifted —
-// an all-day event is a calendar date, not an instant.
+// an all-day event is a calendar date, not an instant. Such events carry
+// `allDay: true`. Their DTEND is EXCLUSIVE (RFC 5545 §3.6.1): a one-day event
+// on the 20th has DTEND the 21st. `end` keeps that exclusive value (correct
+// for overlap maths); use allDayLastDate() for the inclusive date to display.
 //
 // Recurrence. RRULE is expanded (see lib/integrations/rrule.ts) into one event
 // per occurrence, with EXDATE exclusions and RECURRENCE-ID overrides applied.
@@ -30,6 +33,18 @@ export interface IcsEvent {
   end: string | null;
   location: string | null;
   description: string | null;
+  allDay: boolean; // VALUE=DATE event: start/end are UTC-midnight dates
+}
+
+/**
+ * Inclusive last date ("YYYY-MM-DD") of an all-day event. DTEND is exclusive,
+ * so it is end minus one day; a missing or degenerate end means a single day.
+ */
+export function allDayLastDate(startIso: string, endIso: string | null): string {
+  const startDay = startIso.slice(0, 10);
+  if (!endIso) return startDay;
+  const last = new Date(new Date(endIso).getTime() - 86_400_000).toISOString().slice(0, 10);
+  return last < startDay ? startDay : last;
 }
 
 // Unfold RFC 5545 folded lines (CRLF followed by space/tab = continuation).
@@ -246,6 +261,7 @@ function buildEvent(
   externalId: string,
   startIso: string,
   endIso: string | null,
+  allDay: boolean,
 ): IcsEvent {
   return {
     uid,
@@ -255,6 +271,7 @@ function buildEvent(
     end: endIso,
     location: raw.location ? unescapeText(raw.location) : null,
     description: raw.description ? unescapeText(raw.description).slice(0, 2000) : null,
+    allDay,
   };
 }
 
@@ -291,7 +308,7 @@ export function parseIcs(ics: string, opts?: ParseIcsOptions): IcsEvent[] {
     const rule = raw.rrule ? parseRrule(raw.rrule) : null;
     if (!rule) {
       // Not recurring, or a rule this engine won't attempt: the master alone.
-      events.push(buildEvent(raw, uid, uid, startIso, endIso));
+      events.push(buildEvent(raw, uid, uid, startIso, endIso, startMoment.dateOnly));
       continue;
     }
 
@@ -346,6 +363,7 @@ export function parseIcs(ics: string, opts?: ParseIcsOptions): IcsEvent[] {
             `${uid}_${compactUtc(occStart)}`,
             momentToIso(oStart),
             oEnd ? momentToIso(oEnd) : null,
+            oStart.dateOnly,
           ),
         );
         continue;
@@ -354,7 +372,9 @@ export function parseIcs(ics: string, opts?: ParseIcsOptions): IcsEvent[] {
       const occEnd =
         durationNaive === null ? null : new Date(toUtc(naive + durationNaive)).toISOString();
 
-      events.push(buildEvent(raw, uid, `${uid}_${compactUtc(occStart)}`, occStart, occEnd));
+      events.push(
+        buildEvent(raw, uid, `${uid}_${compactUtc(occStart)}`, occStart, occEnd, startMoment.dateOnly),
+      );
     }
   }
 

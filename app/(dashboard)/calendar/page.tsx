@@ -4,6 +4,7 @@ import { Panel } from "@/components/ui/Panel";
 import { AddRecord } from "@/components/crud/AddRecord";
 import { ItemRow } from "@/components/crud/ItemRow";
 import { SyncButton } from "@/components/calendar/SyncButton";
+import { eventDayKey, formatEventWhen } from "@/lib/domains/calendar-format";
 
 export default async function CalendarPage() {
   const supabase = await createClient();
@@ -21,9 +22,10 @@ export default async function CalendarPage() {
     );
   }
 
+  const tz = process.env.USER_TIMEZONE || "UTC";
   const byDay = new Map<string, typeof events>();
   for (const e of events) {
-    const day = e.start_time.slice(0, 10);
+    const day = eventDayKey(e, tz);
     byDay.set(day, [...(byDay.get(day) ?? []), e]);
   }
 
@@ -63,10 +65,7 @@ export default async function CalendarPage() {
                   id={e.id}
                   title={e.title ?? "(untitled)"}
                   badge={e.source}
-                  subtitle={[
-                    `${e.start_time.slice(11, 16)}${e.end_time ? "–" + e.end_time.slice(11, 16) : ""} UTC`,
-                    e.location,
-                  ]
+                  subtitle={[formatEventWhen(e, tz), e.location]
                     .filter(Boolean)
                     .join(" · ")}
                 />

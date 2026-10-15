@@ -56,6 +56,7 @@ export async function upsertIcsEvents(
     end_time: e.end,
     location: e.location,
     description: e.description,
+    all_day: e.allDay,
     source: "ics",
     ...(userId ? { user_id: userId } : {}),
   }));

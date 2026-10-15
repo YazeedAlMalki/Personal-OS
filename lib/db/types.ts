@@ -230,6 +230,7 @@ export type CalendarEvent = {
   location: string | null;
   description: string | null;
   source: string;
+  all_day: boolean;
   created_at: string;
   updated_at: string;
 };
