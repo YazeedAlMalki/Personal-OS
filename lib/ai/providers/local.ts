@@ -11,6 +11,15 @@ import {
 
 // Local, zero-cost provider via Ollama (OpenAI-compatible local server also works
 // by pointing OLLAMA_BASE_URL at it). Default for the cost-sensitive build.
+// LOCAL_AI_TOKEN is sent as a bearer token when set. Use it when Ollama sits behind
+// a reverse proxy on the homelab tunnel that checks the token. Unset = no header.
+function localHeaders(json = true): Record<string, string> {
+  const h: Record<string, string> = json ? { "content-type": "application/json" } : {};
+  const token = process.env.LOCAL_AI_TOKEN;
+  if (token) h.authorization = `Bearer ${token}`;
+  return h;
+}
+
 export function localProvider(): AIProvider {
   const base = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
   const model = process.env.LOCAL_CHAT_MODEL ?? "llama3.1:8b";
@@ -22,7 +31,7 @@ export function localProvider(): AIProvider {
     async classify(text: string): Promise<Classified> {
       const res = await fetch(`${base}/api/chat`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: localHeaders(),
         body: JSON.stringify({
           model,
           format: "json",
@@ -49,7 +58,7 @@ export function localProvider(): AIProvider {
     async extractEntities(text: string): Promise<ExtractedEntity[]> {
       const res = await fetch(`${base}/api/chat`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: localHeaders(),
         body: JSON.stringify({
           model,
           format: "json",
@@ -70,7 +79,7 @@ export function localProvider(): AIProvider {
       for (const prompt of texts) {
         const res = await fetch(`${base}/api/embeddings`, {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: localHeaders(),
           body: JSON.stringify({ model: embedModel, prompt }),
         });
         if (!res.ok) throw new Error(`ollama embed ${res.status}`);
@@ -83,7 +92,7 @@ export function localProvider(): AIProvider {
     async answer(question: string, context: string): Promise<string> {
       const res = await fetch(`${base}/api/chat`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: localHeaders(),
         body: JSON.stringify({
           model,
           stream: false,
@@ -102,7 +111,7 @@ export function localProvider(): AIProvider {
 
     async health() {
       try {
-        const r = await fetch(`${base}/api/tags`);
+        const r = await fetch(`${base}/api/tags`, { headers: localHeaders(false) });
         return { ok: r.ok, model };
       } catch {
         return { ok: false, model };
