@@ -38,20 +38,26 @@ export async function deleteEvent(supabase: SupabaseClient, id: string): Promise
 }
 
 // Idempotent: upsert on (user_id, source, external_event_id). RLS-scoped client →
-// user_id fills from the column default (auth.uid()).
+// user_id fills from the column default (auth.uid()). Service-role callers (the
+// cron) have no auth.uid(), so they pass userId explicitly.
 export async function upsertIcsEvents(
   supabase: SupabaseClient,
   events: IcsEvent[],
+  userId?: string,
 ): Promise<number> {
   if (events.length === 0) return 0;
   const rows = events.map((e) => ({
-    external_event_id: e.uid,
+    // externalId, not uid: a recurring series expands to many events that all
+    // share one uid, so the occurrence-qualified id is what keeps the
+    // (user_id, source, external_event_id) upsert key unique.
+    external_event_id: e.externalId,
     title: e.title,
     start_time: e.start,
     end_time: e.end,
     location: e.location,
     description: e.description,
     source: "ics",
+    ...(userId ? { user_id: userId } : {}),
   }));
   const { error, count } = await supabase
     .from("calendar_events_cache")
