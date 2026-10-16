@@ -1,6 +1,7 @@
 import { localProvider } from "@/lib/ai/providers/local";
 import { openaiProvider } from "@/lib/ai/providers/openai";
 import { anthropicProvider } from "@/lib/ai/providers/anthropic";
+import { layaClassify } from "@/lib/ai/providers/laya";
 import { regexClassify, regexExtractEntities } from "@/lib/ai/regex";
 import type { AIProvider, Classified, ExtractedEntity } from "@/lib/ai/types";
 
@@ -42,9 +43,15 @@ export async function classifyWithFallback(
   text: string,
 ): Promise<{ result: Classified; via: string }> {
   try {
+    // AI_CLASSIFIER=laya routes classification only; extraction/answers/embeddings
+    // stay on AI_PROVIDER.
+    if ((process.env.AI_CLASSIFIER ?? "").toLowerCase() === "laya") {
+      return { result: await layaClassify(text), via: "laya" };
+    }
     const p = getProvider();
     return { result: await p.classify(text), via: p.name };
-  } catch {
+  } catch (e) {
+    console.error("[ai] classify failed, using regex:", e instanceof Error ? e.message : e);
     return { result: regexClassify(text), via: "regex" };
   }
 }
