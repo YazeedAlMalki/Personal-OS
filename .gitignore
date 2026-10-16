@@ -39,3 +39,4 @@ yarn-error.log*
 /test-results/
 /playwright-report/
 .env*
+/test-results.json
