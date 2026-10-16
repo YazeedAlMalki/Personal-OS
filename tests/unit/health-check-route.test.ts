@@ -37,6 +37,20 @@ describe("GET /api/health-check", () => {
     expect(await (await GET()).json()).toMatchObject({ ok: true, ai: "unavailable", ai_model: "unconfigured" });
   });
 
+  it("reports a provider that never answers as unavailable instead of hanging", async () => {
+    vi.useFakeTimers();
+    try {
+      aiHealth.mockReturnValue(new Promise(() => {}));
+      const pending = GET();
+      await vi.advanceTimersByTimeAsync(3_000);
+      const res = await pending;
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ ok: true, db: "ok", ai: "unavailable" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("returns 503 when the database is unreachable", async () => {
     dbResult.error = { message: "down" };
     aiHealth.mockResolvedValue({ ok: true, model: "m" });
