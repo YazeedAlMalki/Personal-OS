@@ -1,9 +1,11 @@
 """Homelab AI gateway for Personal OS V2. One port, bearer-token checked.
 
   POST /v1/audio/transcriptions -> LFM2.5-Audio-1.5B ASR, OpenAI response shape {"text": ...}
+  /v1/systemone*                -> proxied to laya-serve (the app's classifier, AI_CLASSIFIER=laya)
   anything else                 -> proxied to Ollama (the app's chat + embeddings path)
 
-Env: LOCAL_AI_TOKEN (required), PORT (default 8090), OLLAMA_URL (default http://127.0.0.1:11434)
+Env: LOCAL_AI_TOKEN (required), PORT (default 8090), OLLAMA_URL (default http://127.0.0.1:11434),
+     LAYA_URL (default http://127.0.0.1:8000)
 Run: ~/venvs/lfm-audio/bin/python ai_gateway.py   (needs ffmpeg on PATH)
 """
 import hmac, json, os, subprocess, threading, urllib.error, urllib.request
@@ -17,6 +19,7 @@ from liquid_audio import ChatState, LFM2AudioModel, LFM2AudioProcessor
 
 TOKEN = os.environ["LOCAL_AI_TOKEN"].encode()
 OLLAMA = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
+LAYA = os.environ.get("LAYA_URL", "http://127.0.0.1:8000").rstrip("/")
 PORT = int(os.environ.get("PORT", "8090"))
 REPO = "LiquidAI/LFM2.5-Audio-1.5B"
 MAX_BODY = 25 * 1024 * 1024  # same cap as OpenAI's transcription endpoint
@@ -91,7 +94,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(200, json.dumps({"text": text}).encode())
 
         # ponytail: buffered proxy, no streaming; the app calls Ollama with stream:false
-        req = urllib.request.Request(OLLAMA + self.path, data=body or None, method=self.command,
+        laya = self.path.split("?")[0].startswith("/v1/systemone")
+        upstream, name = (LAYA, "laya") if laya else (OLLAMA, "ollama")
+        req = urllib.request.Request(upstream + self.path, data=body or None, method=self.command,
                                      headers={"Content-Type": self.headers.get("Content-Type", "application/json")})
         try:
             with urllib.request.urlopen(req, timeout=300) as r:
@@ -99,7 +104,7 @@ class Handler(BaseHTTPRequestHandler):
         except urllib.error.HTTPError as e:
             self.reply(e.code, e.read(), e.headers.get("Content-Type", "application/json"))
         except urllib.error.URLError:
-            self.reply(502, b'{"error":"ollama unreachable"}')
+            self.reply(502, json.dumps({"error": f"{name} unreachable"}).encode())
 
     do_GET = do_POST = do_DELETE = handle_any
 
