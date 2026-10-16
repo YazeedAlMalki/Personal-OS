@@ -57,7 +57,8 @@ test("calendar lists events without a load error", async ({ page }) => {
   const res = await page.goto("/calendar");
   expect(res?.status()).toBeLessThan(400);
   await expectPageLoaded(page, "Calendar");
-  await expect(page.getByText("Upcoming", { exact: true }).or(page.getByText("Add event"))).toBeVisible();
+  // "Add event" always renders; "Upcoming" only when there are no events.
+  await expect(page.getByText("Add event", { exact: true })).toBeVisible();
 });
 
 test("finance shows net worth and the snapshot list", async ({ page }) => {
