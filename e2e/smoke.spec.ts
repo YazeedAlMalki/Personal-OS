@@ -1,106 +1,84 @@
-import { test, expect, Page } from '@playwright/test';
+import { test as base, expect, type Page } from "@playwright/test";
+import { hasCredentials } from "./env";
 
-const BASE_URL = 'https://personal-os-v2-six.vercel.app';
-const TEST_EMAIL = process.env.TEST_EMAIL || 'ymalki95@gmail.com';
-const TEST_PASSWORD = process.env.TEST_PASSWORD || 'Ym#0542773344';
+// Signed-in smoke tests (session from auth.setup.ts). Read-only: nothing here
+// writes data, so they are safe to run against production.
 
-test.describe('Personal OS V2 E2E Smoke Tests', () => {
-  test.describe.configure({ timeout: 30000 });
-
-  // ============================================================================
-  // Test 1: App Home - Dashboard Loads
-  // ============================================================================
-  test('1. App Home - Dashboard Loads', async ({ page }) => {
-    test.setTimeout(30000);
-    await page.goto(`${BASE_URL}/`);
-    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
-
-    // Verify we can see the main content area
-    const main = page.locator('main');
-    await expect(main).toBeVisible({ timeout: 5000 }).catch(() => {});
-  });
-
-  // ============================================================================
-  // Test 2: Calendar Page Loads
-  // ============================================================================
-  test('2. Calendar Page Loads', async ({ page }) => {
-    test.setTimeout(30000);
-    await page.goto(`${BASE_URL}/calendar`);
-    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
-    await expect(page.locator('main')).toBeVisible({ timeout: 5000 }).catch(() => {});
-  });
-
-  // ============================================================================
-  // Test 3: Finance Page Loads
-  // ============================================================================
-  test('3. Finance Page Loads', async ({ page }) => {
-    test.setTimeout(30000);
-    await page.goto(`${BASE_URL}/finance`);
-    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
-    await expect(page.locator('main')).toBeVisible({ timeout: 5000 }).catch(() => {});
-  });
-
-  // ============================================================================
-  // Test 4: Health Page Loads
-  // ============================================================================
-  test('4. Health Page Loads', async ({ page }) => {
-    test.setTimeout(30000);
-    await page.goto(`${BASE_URL}/health`);
-    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
-    await expect(page.locator('main')).toBeVisible({ timeout: 5000 }).catch(() => {});
-  });
-
-  // ============================================================================
-  // Test 5: Tasks Page Loads
-  // ============================================================================
-  test('5. Tasks Page Loads', async ({ page }) => {
-    test.setTimeout(30000);
-    await page.goto(`${BASE_URL}/tasks`);
-    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
-    await expect(page.locator('main')).toBeVisible({ timeout: 5000 }).catch(() => {});
-  });
-
-  // ============================================================================
-  // Test 6: Goals Page Loads
-  // ============================================================================
-  test('6. Goals Page Loads', async ({ page }) => {
-    test.setTimeout(30000);
-    await page.goto(`${BASE_URL}/goals`);
-    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
-    await expect(page.locator('main')).toBeVisible({ timeout: 5000 }).catch(() => {});
-  });
-
-  // ============================================================================
-  // Test 7: Projects Page Loads
-  // ============================================================================
-  test('7. Projects Page Loads', async ({ page }) => {
-    test.setTimeout(30000);
-    await page.goto(`${BASE_URL}/projects`);
-    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
-    await expect(page.locator('main')).toBeVisible({ timeout: 5000 }).catch(() => {});
-  });
-
-  // ============================================================================
-  // Test 8: Health-Check API Endpoint
-  // ============================================================================
-  test('8. Health-Check API Endpoint', async ({ page }) => {
-    test.setTimeout(10000);
-
-    const response = await page.request.get(`${BASE_URL}/api/health-check`);
-    
-    // Status might be 200 or 404 depending on deployment
-    expect([200, 404]).toContain(response.status());
-
-    if (response.status() === 200) {
-      const data = await response.json();
-      expect(data).toHaveProperty('ok');
-      expect(data).toHaveProperty('db');
-      expect(data).toHaveProperty('ai');
-      expect(data).toHaveProperty('ai_model');
-    }
-  });
+// Fail any test whose page throws an uncaught error.
+const test = base.extend<{ page: Page }>({
+  page: async ({ page }, use) => {
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await use(page);
+    expect(errors, "uncaught page errors").toEqual([]);
+  },
 });
 
-test.describe.configure({
-  timeout: 2 * 60 * 1000, // 2 minutes per spec
+test.skip(!hasCredentials, "E2E_EMAIL / E2E_PASSWORD not set");
+
+const NAV: [label: string, path: string, heading: string][] = [
+  ["Dashboard", "/", "Today"],
+  ["Tasks", "/tasks", "Tasks"],
+  ["Calendar", "/calendar", "Calendar"],
+  ["Goals", "/goals", "Goals"],
+  ["Projects", "/projects", "Projects"],
+  ["Health", "/health", "Health & fitness"],
+  ["Journal", "/journal", "Journal"],
+  ["CRM", "/crm", "CRM"],
+  ["Opportunities", "/opportunities", "Opportunities"],
+  ["Decisions", "/decisions", "Decision Journal"],
+  ["Risks", "/risks", "Risk Register"],
+  ["Finance", "/finance", "Finance"],
+  ["Learning", "/learning", "Learning"],
+  ["Graph", "/graph", "Relationship Graph"],
+  ["Insights", "/insights", "Insights"],
+  ["Settings", "/settings", "Settings"],
+];
+
+// A page that failed to load data renders a "Could not load …" panel instead of its h1.
+async function expectPageLoaded(page: Page, heading: string) {
+  await expect(page.getByRole("heading", { level: 1, name: heading, exact: true })).toBeVisible();
+  await expect(page.getByText(/could not load/i)).toHaveCount(0);
+}
+
+test("sidebar reaches every section and marks it active", async ({ page }) => {
+  await page.goto("/");
+  const nav = page.locator("aside nav");
+  for (const [label, path, heading] of NAV) {
+    const link = nav.getByRole("link", { name: label, exact: true });
+    await link.click();
+    await expect(page).toHaveURL(new RegExp(`${path === "/" ? "/" : path}$`));
+    await expectPageLoaded(page, heading);
+    await expect(link).toHaveClass(/(^|\s)bg-ink-2(\s|$)/);
+  }
+});
+
+test("calendar lists events without a load error", async ({ page }) => {
+  const res = await page.goto("/calendar");
+  expect(res?.status()).toBeLessThan(400);
+  await expectPageLoaded(page, "Calendar");
+  // "Add event" always renders; "Upcoming" only when there are no events.
+  await expect(page.getByText("Add event", { exact: true })).toBeVisible();
+});
+
+test("finance shows net worth and the snapshot list", async ({ page }) => {
+  const res = await page.goto("/finance");
+  expect(res?.status()).toBeLessThan(400);
+  await expectPageLoaded(page, "Finance");
+  await expect(page.getByText(/^Net worth:/)).toBeVisible();
+  await expect(page.getByText(/^Snapshots \(\d+\)$/)).toBeVisible();
+});
+
+test("health shows today's log form", async ({ page }) => {
+  const res = await page.goto("/health");
+  expect(res?.status()).toBeLessThan(400);
+  await expectPageLoaded(page, "Health & fitness");
+  await expect(page.getByText("Log today", { exact: true })).toBeVisible();
+});
+
+test("tasks shows the task list", async ({ page }) => {
+  const res = await page.goto("/tasks");
+  expect(res?.status()).toBeLessThan(400);
+  await expectPageLoaded(page, "Tasks");
+  await expect(page.getByText(/^All tasks \(\d+\)$/)).toBeVisible();
 });
