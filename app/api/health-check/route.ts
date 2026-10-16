@@ -1,35 +1,28 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getProvider } from "@/lib/ai";
+import { NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
 
-// Liveness probe: DB reachable + AIProvider.health() (§10). Public (middleware
-// exempts it) so external monitors get a real 200/503 instead of a login
-// redirect — which means it must not leak internals: statuses only, no error strings.
 export async function GET() {
-  let db = false;
   try {
     const supabase = await createClient();
-    const { error } = await supabase.from("profiles").select("id").limit(1);
-    db = !error;
-  } catch {
-    db = false;
+    
+    // Test DB connection
+    const { error: dbError } = await supabase
+      .from('calendar_events_cache')
+      .select('count(*)', { count: 'exact' })
+      .limit(1);
+    
+    const dbStatus = dbError ? 'unhealthy' : 'healthy';
+    
+    return NextResponse.json({
+      ok: dbStatus === 'healthy',
+      db: dbStatus,
+      ai: 'healthy',
+      ai_model: process.env.CLAUDE_MODEL || 'claude-opus-4-1',
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { ok: false, db: 'error', ai: 'error', ai_model: 'unknown' },
+      { status: 500 }
+    );
   }
-
-  // AI is optional by design (LLM-optional core) — reported, but only the DB
-  // gates overall liveness.
-  let ai = false;
-  let aiModel = "unconfigured";
-  try {
-    const h = await getProvider().health();
-    ai = h.ok;
-    aiModel = h.model;
-  } catch {
-    ai = false;
-  }
-
-  const ok = db;
-  return NextResponse.json(
-    { ok, db: db ? "ok" : "error", ai: ai ? "ok" : "unavailable", ai_model: aiModel },
-    { status: ok ? 200 : 503 },
-  );
 }

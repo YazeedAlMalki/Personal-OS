@@ -11,7 +11,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "telegram": "npx tsx scripts/telegram-poll.ts",
-    "backfill:quadrants": "npx tsx scripts/backfill-quadrants.ts"
+    "backfill:quadrants": "npx tsx scripts/backfill-quadrants.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
@@ -29,6 +32,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@types/cytoscape": "^3.21.8",
     "@types/node": "^22.9.0",
     "@types/react": "^19.0.0",

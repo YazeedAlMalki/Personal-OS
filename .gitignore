@@ -33,3 +33,9 @@ yarn-error.log*
 /ollama-data
 ._*
 .env.local.bak*
+
+# playwright
+/tests/e2e/.auth/
+/test-results/
+/playwright-report/
+.env*
